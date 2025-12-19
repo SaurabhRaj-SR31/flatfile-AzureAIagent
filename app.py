@@ -116,29 +116,32 @@ def index():
 @app.post("/chat")
 def chat():
     data = request.get_json(silent=True) or {}
-    user_message = data.get("message", "").strip()
+    user_message = (data.get("message") or "").strip()
 
     if not user_message:
         return jsonify({"error": "message required"}), 400
 
     try:
-        # 1️⃣ Create thread
+        # 1️⃣ Create a new conversation thread
         thread = project_client.agents.threads.create()
 
-        # 2️⃣ Add user message
+        # 2️⃣ Add user message to thread
         project_client.agents.messages.create(
             thread_id=thread.id,
-            role=MessageRole.USER,
+            role=MessageRole.USER,   # enum works for sending
             content=user_message,
         )
 
-        # 3️⃣ Run agent
-        project_client.agents.runs.create_and_process(
+        # 3️⃣ Run the agent (blocking until complete)
+        run = project_client.agents.runs.create_and_process(
             thread_id=thread.id,
             agent_id=AGENT_ID,
         )
 
-        # 4️⃣ Read messages (FIXED)
+        if run.status.lower() == "failed":
+            return jsonify({"error": "Agent execution failed"}), 500
+
+        # 4️⃣ Read messages (ItemPaged → list)
         messages_paged = project_client.agents.messages.list(
             thread_id=thread.id,
             order=ListSortOrder.ASCENDING,
@@ -146,10 +149,11 @@ def chat():
 
         messages = list(messages_paged)
 
-        reply_text = "No response from agent"
+        reply_text = "No response from agent."
 
+        # 5️⃣ Find last assistant message (role is STRING here)
         for msg in reversed(messages):
-            if msg.role == MessageRole.ASSISTANT:
+            if msg.role == "assistant":
                 if msg.text_messages:
                     reply_text = msg.text_messages[-1].text.value
                 break
@@ -235,6 +239,7 @@ def health():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
