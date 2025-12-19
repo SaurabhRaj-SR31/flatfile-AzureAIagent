@@ -45,7 +45,7 @@ AGENT_ID = "asst_EBPhWjwxGX4yEnh5k5KjUhWC"
 AZURE_STORAGE_CONNECTION_STRING = (
     "DefaultEndpointsProtocol=https;"
     "AccountName=discoveriqstorage;"
-    "AccountKey=PASTE_STORAGE_ACCOUNT_KEY_HERE;"
+    "AccountKey=fEVn0vPxGKaztcvTSBnFcDyb2F/5kWOud5urotgklyY+ce5LFrTpbvkwmBBRLTI2Q7uoRTmIpXqK+ASth1FD4A==;"
     "EndpointSuffix=core.windows.net"
 )
 
@@ -232,3 +232,4 @@ def health():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
