@@ -1,0 +1,7 @@
+flask
+azure-identity
+azure-storage-blob
+azure-ai-projects
+reportlab
+werkzeug
+
