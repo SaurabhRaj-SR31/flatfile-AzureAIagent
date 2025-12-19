@@ -122,41 +122,44 @@ def chat():
         return jsonify({"error": "message required"}), 400
 
     try:
-        # Create conversation thread
+        # 1️⃣ Create thread
         thread = project_client.agents.threads.create()
 
-        # Add user message
+        # 2️⃣ Add user message
         project_client.agents.messages.create(
             thread_id=thread.id,
             role=MessageRole.USER,
             content=user_message,
         )
 
-        # Run agent
+        # 3️⃣ Run agent
         project_client.agents.runs.create_and_process(
             thread_id=thread.id,
             agent_id=AGENT_ID,
         )
 
-        # Read messages
-        messages = project_client.agents.messages.list(
+        # 4️⃣ Read messages (FIXED)
+        messages_paged = project_client.agents.messages.list(
             thread_id=thread.id,
             order=ListSortOrder.ASCENDING,
-        ).data
+        )
+
+        messages = list(messages_paged)
+
+        reply_text = "No response from agent"
 
         for msg in reversed(messages):
-            if msg.role == "assistant":
-                return jsonify({
-                    "reply": msg.text_messages[-1].text.value
-                })
+            if msg.role == MessageRole.ASSISTANT:
+                if msg.text_messages:
+                    reply_text = msg.text_messages[-1].text.value
+                break
 
-        return jsonify({"reply": "No response from agent"})
+        return jsonify({"reply": reply_text})
 
     except Exception as e:
         print("CHAT ERROR:", e)
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-
 
 # ---------------- FILE UPLOAD ----------------
 @app.post("/upload")
@@ -232,5 +235,6 @@ def health():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
