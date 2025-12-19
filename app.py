@@ -32,8 +32,8 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 
 # ---- 1️⃣ AZURE ENTRA (APP REGISTRATION) ----
 TENANT_ID = "d3e4c61b-2e8e-4b54-a89c-19706dab6b3c"
-CLIENT_ID = "483ec6c4-82eb-41ea-8ec6-059386941fa3"
-CLIENT_SECRET = "3L28Q~U~g-5ApCLAEZmvmxWvH_OnqW2nUUmkIaOH"
+CLIENT_ID = "ff7486df-777e-440d-865f-6d74845a6f85"
+CLIENT_SECRET = ".DL8Q~5eztBS_rp6i9xlsIFeM2lymslAf8A9caiB"
 
 # ---- 2️⃣ AZURE AI FOUNDRY PROJECT ----
 AI_PROJECT_ENDPOINT = (
@@ -232,4 +232,5 @@ def health():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
