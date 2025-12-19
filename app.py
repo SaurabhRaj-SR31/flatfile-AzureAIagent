@@ -2,50 +2,64 @@ import os
 import uuid
 import io
 import traceback
-import re
 
 from flask import Flask, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 
-# ===== Azure AI Foundry (API KEY AUTH) =====
+# =====================================================
+# 🔐 AZURE AUTH (SERVICE PRINCIPAL – REQUIRED FOR AGENTS)
+# =====================================================
+from azure.identity import ClientSecretCredential
 from azure.ai.projects import AIProjectClient
 from azure.ai.agents.models import MessageRole, ListSortOrder
-from azure.core.credentials import AzureKeyCredential
 
-# ===== Azure Blob Storage =====
+# =====================================================
+# ☁️ AZURE BLOB STORAGE
+# =====================================================
 from azure.storage.blob import BlobServiceClient
 
-# ===== PDF Generation =====
+# =====================================================
+# 📄 PDF GENERATION
+# =====================================================
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 
 
 # =====================================================
-# 🔐 HARD-CODED CONFIG (OK FOR NOW – DEMO)
+# 🔴 UPDATE VALUES BELOW (VERY IMPORTANT)
 # =====================================================
-AI_PROJECT_ENDPOINT = "https://ai-rg-discoveriq.services.ai.azure.com/api/projects/DiscoverIQ"
-AI_PROJECT_API_KEY = "G19Ax6sSu5T6nhhrqfAmjUQnc78Ox6eOsMzT2X4UK6TkhD2imKnWJQQJ99BJACYeBjFXJ3w3AAAAACOG3PVC"
 
+# ---- 1️⃣ AZURE ENTRA (APP REGISTRATION) ----
+TENANT_ID = "d3e4c61b-2e8e-4b54-a89c-19706dab6b3c"
+CLIENT_ID = "483ec6c4-82eb-41ea-8ec6-059386941fa3"
+CLIENT_SECRET = "3L28Q~U~g-5ApCLAEZmvmxWvH_OnqW2nUUmkIaOH"
+
+# ---- 2️⃣ AZURE AI FOUNDRY PROJECT ----
+AI_PROJECT_ENDPOINT = (
+    "https://ai-rg-discoveriq.services.ai.azure.com/api/projects/DiscoverIQ"
+)
 AGENT_ID = "asst_EBPhWjwxGX4yEnh5k5KjUhWC"
 
+# ---- 3️⃣ AZURE STORAGE ACCOUNT ----
 AZURE_STORAGE_CONNECTION_STRING = (
     "DefaultEndpointsProtocol=https;"
     "AccountName=discoveriqstorage;"
-    "AccountKey=fEVn0vPxGKaztcvTSBnFcDyb2F/5kWOud5urotgklyY+ce5LFrTpbvkwmBBRLTI2Q7uoRTmIpXqK+ASth1FD4A==;"
+    "AccountKey=PASTE_STORAGE_ACCOUNT_KEY_HERE;"
     "EndpointSuffix=core.windows.net"
 )
 
 AZURE_BLOB_CONTAINER = "flatfileinputs"
+
 # =====================================================
-
-
+# ⚙️ APP CONFIG
+# =====================================================
 ALLOWED_EXTENSIONS = {".csv", ".xlsx"}
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 
 # =====================================================
-# Flask App
+# 🚀 FLASK APP
 # =====================================================
 app = Flask(__name__, static_folder=".", static_url_path="")
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
@@ -56,18 +70,24 @@ def allowed_file(filename: str) -> bool:
 
 
 # =====================================================
-# Azure AI Foundry Client (API KEY)
+# 🔐 AZURE AI FOUNDRY CLIENT (AAD TOKEN BASED)
 # =====================================================
-project_client = AIProjectClient(
-    endpoint=AI_PROJECT_ENDPOINT,
-    credential=AzureKeyCredential(AI_PROJECT_API_KEY),
+credential = ClientSecretCredential(
+    tenant_id=TENANT_ID,
+    client_id=CLIENT_ID,
+    client_secret=CLIENT_SECRET,
 )
 
-print("✅ Azure AI Foundry client initialized using API Key")
+project_client = AIProjectClient(
+    endpoint=AI_PROJECT_ENDPOINT,
+    credential=credential,
+)
+
+print("✅ Azure AI Foundry Agent authenticated using Service Principal")
 
 
 # =====================================================
-# Azure Blob Storage Client
+# ☁️ AZURE BLOB STORAGE CLIENT
 # =====================================================
 blob_service_client = BlobServiceClient.from_connection_string(
     AZURE_STORAGE_CONNECTION_STRING
@@ -85,7 +105,7 @@ print("✅ Azure Blob Storage initialized")
 
 
 # =====================================================
-# Routes
+# 🌐 ROUTES
 # =====================================================
 @app.route("/")
 def index():
@@ -102,7 +122,7 @@ def chat():
         return jsonify({"error": "message required"}), 400
 
     try:
-        # Create thread
+        # Create conversation thread
         thread = project_client.agents.threads.create()
 
         # Add user message
@@ -118,10 +138,10 @@ def chat():
             agent_id=AGENT_ID,
         )
 
-        # Fetch messages
+        # Read messages
         messages = project_client.agents.messages.list(
             thread_id=thread.id,
-            order=ListSortOrder.ASCENDING
+            order=ListSortOrder.ASCENDING,
         ).data
 
         for msg in reversed(messages):
@@ -181,7 +201,7 @@ def download_pdf():
         io.BytesIO(pdf_bytes),
         mimetype="application/pdf",
         as_attachment=True,
-        download_name="agent_response.pdf"
+        download_name="agent_response.pdf",
     )
 
 
@@ -207,7 +227,7 @@ def health():
 
 
 # =====================================================
-# ENTRY POINT (RENDER / LOCAL)
+# ▶️ ENTRY POINT (RENDER / LOCAL)
 # =====================================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
