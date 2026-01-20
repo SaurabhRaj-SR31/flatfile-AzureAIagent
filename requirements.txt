@@ -1,7 +1,9 @@
 flask
+werkzeug
 azure-identity
 azure-storage-blob
 azure-ai-projects
 reportlab
-werkzeug
-
+pandas
+openpyxl
+gunicorn
