@@ -1,257 +1,137 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>Flatfile Agent Chat</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    /* === SAME STYLES (UNCHANGED) === */
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #f3f4f6;
-      display: flex;
-      justify-content: center;
-      align-items: stretch;
-      min-height: 100vh;
-      padding: 18px;
-    }
-
-    .chat-wrapper {
-      margin: 12px;
-      background: #ffffff;
-      border-radius: 14px;
-      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
-      display: flex;
-      flex-direction: column;
-      max-width: 900px;
-      width: 100%;
-      overflow: hidden;
-      min-height: 560px;
-    }
-
-    header {
-      padding: 14px 18px;
-      background: #111827;
-      color: #f9fafb;
-      font-size: 16px;
-      font-weight: 600;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    header span {
-      font-size: 11px;
-      opacity: 0.8;
-    }
-
-    #messages {
-      flex: 1;
-      padding: 18px;
-      overflow-y: auto;
-      background: linear-gradient(180deg, #f9fafb 0%, #fbfdff 100%);
-    }
-
-    .msg-row {
-      margin-bottom: 12px;
-      display: flex;
-    }
-
-    .msg-row.user { justify-content: flex-end; }
-    .msg-row.agent { justify-content: flex-start; }
-
-    .bubble {
-      max-width: 72%;
-      padding: 10px 14px;
-      border-radius: 12px;
-      font-size: 14px;
-      line-height: 1.45;
-    }
-
-    .user .bubble {
-      background: #2563eb;
-      color: #fff;
-      border-bottom-right-radius: 4px;
-    }
-
-    .agent .bubble {
-      background: #e5e7eb;
-      color: #111827;
-      border-bottom-left-radius: 4px;
-    }
-
-    #upload-area, #input-area {
-      border-top: 1px solid #e5e7eb;
-      padding: 10px 12px;
-      display: flex;
-      gap: 8px;
-      background: #fff;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    button {
-      border: none;
-      border-radius: 8px;
-      padding: 8px 14px;
-      cursor: pointer;
-      color: #fff;
-    }
-
-    #send-btn { background: #16a34a; }
-    #upload-btn { background: #0ea5a4; }
-
-    button:disabled { opacity: 0.6; cursor: default; }
-
-    textarea {
-      flex: 1;
-      resize: none;
-      border-radius: 8px;
-      border: 1px solid #d1d5db;
-      padding: 8px;
-    }
-  </style>
+<title>Flatfile Agent</title>
+<style>
+body{font-family:system-ui;background:#f3f4f6;padding:20px;}
+.wrap{background:#fff;border-radius:12px;
+max-width:900px;margin:auto;padding:15px;}
+.msg{margin:6px;}
+.user{text-align:right;}
+.agent{text-align:left;}
+.bubble{display:inline-block;padding:8px;border-radius:8px;}
+.user .bubble{background:#2563eb;color:white;}
+.agent .bubble{background:#e5e7eb;}
+</style>
 </head>
 
 <body>
-  <div class="chat-wrapper">
-    <header>
-      <div>Flatfile Agent Chat</div>
-      <span id="session-label"></span>
-    </header>
+<div class="wrap">
 
-    <div id="messages"></div>
+<h3>Flatfile Agent</h3>
 
-    <div id="upload-area">
-      <label>Upload CSV / XLSX</label>
-      <input id="file-input" type="file" accept=".csv,.xlsx" />
-      <button id="upload-btn">Upload</button>
-      <span id="upload-status"></span>
-    </div>
+<div id="msgs"></div>
 
-    <div id="input-area">
-      <textarea id="user-input" rows="1"
-        placeholder="Ask about data quality, profiling results, or datasets..."></textarea>
-      <button id="send-btn">Send</button>
-    </div>
-  </div>
+<input type="file" id="file">
 
-  <script>
-    /* =====================================================
-       🔑 SESSION MANAGEMENT (NEW)
-    ===================================================== */
-    function getSessionId() {
-      let sid = localStorage.getItem("session_id");
-      if (!sid) {
-        sid = crypto.randomUUID();
-        localStorage.setItem("session_id", sid);
-      }
-      return sid;
-    }
+<br><br>
 
-    const SESSION_ID = getSessionId();
-    document.getElementById("session-label").textContent =
-      "Session: " + SESSION_ID.substring(0, 8);
+<button onclick="preview()">Preview</button>
+<button onclick="upload()">Upload</button>
 
-    /* =====================================================
-       UI ELEMENTS
-    ===================================================== */
-    const messagesDiv = document.getElementById('messages');
-    const input = document.getElementById('user-input');
-    const sendBtn = document.getElementById('send-btn');
-    const fileInput = document.getElementById('file-input');
-    const uploadBtn = document.getElementById('upload-btn');
-    const uploadStatus = document.getElementById('upload-status');
+<hr>
 
-    function appendMessage(role, text, meta) {
-      const row = document.createElement('div');
-      row.className = 'msg-row ' + role;
-      const bubble = document.createElement('div');
-      bubble.className = 'bubble';
-      bubble.textContent = text;
-      row.appendChild(bubble);
-      messagesDiv.appendChild(row);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
+<textarea id="txt"></textarea>
+<button onclick="send()">Send</button>
 
-    appendMessage('agent', "Hi — your session is isolated. You can chat or upload files.");
+</div>
 
-    /* =====================================================
-       CHAT (FIXED)
-    ===================================================== */
-    async function sendMessage() {
-      const text = input.value.trim();
-      if (!text) return;
-      appendMessage('user', text);
-      input.value = '';
-      sendBtn.disabled = true;
+<div id="modal" style="
+display:none;
+position:fixed;
+top:0;left:0;
+width:100%;height:100%;
+background:rgba(0,0,0,.6);
+">
+<div style="
+background:white;
+margin:5% auto;
+width:80%;
+padding:15px;
+">
+<h4>Preview (first 10 rows)</h4>
+<table border="1" id="ptable"></table>
+<br>
+<button onclick="closeP()">Close</button>
+</div>
+</div>
 
-      try {
-        const res = await fetch('/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session_id: SESSION_ID,     // ✅ FIX
-            message: text
-          })
-        });
+<script>
+let sid=localStorage.sid||crypto.randomUUID();
+localStorage.sid=sid;
 
-        const data = await res.json();
-        appendMessage('agent', data.reply || data.error || 'No reply');
+function add(role,text){
+let d=document.createElement("div");
+d.className="msg "+role;
+d.innerHTML=`<div class="bubble">${text}</div>`;
+msgs.appendChild(d);
+}
 
-      } catch (err) {
-        appendMessage('agent', 'Network error');
-      } finally {
-        sendBtn.disabled = false;
-      }
-    }
+add("agent","Upload file or chat");
 
-    sendBtn.onclick = sendMessage;
-    input.onkeydown = e => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
-    };
+async function send(){
+let t=txt.value;
+add("user",t);
+txt.value="";
 
-    /* =====================================================
-       FILE UPLOAD (FIXED)
-    ===================================================== */
-    uploadBtn.onclick = async () => {
-      const file = fileInput.files[0];
-      if (!file) return;
+let r=await fetch("/chat",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+session_id:sid,
+message:t
+})
+});
+let d=await r.json();
+add("agent",d.reply||d.error);
+}
 
-      uploadBtn.disabled = true;
-      uploadStatus.textContent = 'Uploading...';
+async function preview(){
+let f=file.files[0];
+if(!f)return;
 
-      const form = new FormData();
-      form.append("file", file);
-      form.append("session_id", SESSION_ID); // ✅ FIX
+let fd=new FormData();
+fd.append("file",f);
 
-      try {
-        const res = await fetch('/upload', {
-          method: 'POST',
-          body: form
-        });
+let r=await fetch("/preview",{method:"POST",body:fd});
+let d=await r.json();
 
-        const data = await res.json();
+ptable.innerHTML="";
 
-        if (res.ok) {
-          uploadStatus.textContent = 'Uploaded';
-          appendMessage('agent', `File uploaded: ${data.filename}`);
-        } else {
-          uploadStatus.textContent = data.error || 'Upload failed';
-        }
+let tr="<tr>";
+d.columns.forEach(c=>tr+=`<th>${c}</th>`);
+tr+="</tr>";
+ptable.innerHTML+=tr;
 
-      } catch (err) {
-        uploadStatus.textContent = 'Network error';
-      } finally {
-        uploadBtn.disabled = false;
-      }
-    };
-  </script>
+d.rows.forEach(r=>{
+let t="<tr>";
+r.forEach(v=>t+=`<td>${v}</td>`);
+t+="</tr>";
+ptable.innerHTML+=t;
+});
+
+modal.style.display="block";
+}
+
+function closeP(){
+modal.style.display="none";
+}
+
+async function upload(){
+let f=file.files[0];
+if(!f)return;
+
+let fd=new FormData();
+fd.append("file",f);
+fd.append("session_id",sid);
+
+let r=await fetch("/upload",{method:"POST",body:fd});
+let d=await r.json();
+
+add("agent",
+`NDJSON uploaded
+Records: ${d.records}`);
+}
+</script>
 </body>
-
 </html>
