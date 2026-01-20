@@ -1,9 +1,10 @@
 import os
 import uuid
 import io
+import json
 import traceback
-from datetime import datetime
 
+import pandas as pd
 from flask import Flask, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 
@@ -21,7 +22,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 
 # =====================================================
-# 🔴 UPDATE THESE VALUES
+# 🔴 HARDCODED VALUES (AS YOU WANT)
 # =====================================================
 TENANT_ID = "d3e4c61b-2e8e-4b54-a89c-19706dab6b3c"
 CLIENT_ID = "ff7486df-777e-440d-865f-6d74845a6f85"
@@ -30,7 +31,6 @@ CLIENT_SECRET = ".DL8Q~5eztBS_rp6i9xlsIFeM2lymslAf8A9caiB"
 AI_PROJECT_ENDPOINT = "https://ai-rg-discoveriq.services.ai.azure.com/api/projects/DiscoverIQ"
 AGENT_ID = "asst_EBPhWjwxGX4yEnh5k5KjUhWC"
 
-# ---- 3️⃣ AZURE STORAGE ACCOUNT ----
 AZURE_STORAGE_CONNECTION_STRING = (
     "DefaultEndpointsProtocol=https;"
     "AccountName=discoveriqstorage;"
@@ -48,7 +48,7 @@ app = Flask(__name__, static_folder=".", static_url_path="")
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 
 # =====================================================
-# 🔐 Azure Clients
+# Azure Clients
 # =====================================================
 credential = ClientSecretCredential(
     tenant_id=TENANT_ID,
@@ -64,6 +64,7 @@ project_client = AIProjectClient(
 blob_service_client = BlobServiceClient.from_connection_string(
     AZURE_STORAGE_CONNECTION_STRING
 )
+
 container_client = blob_service_client.get_container_client(
     AZURE_BLOB_CONTAINER
 )
@@ -74,7 +75,7 @@ except Exception:
     pass
 
 # =====================================================
-# 🧠 SESSION → THREAD MAP (IN-MEMORY)
+# SESSION MAP
 # =====================================================
 SESSION_THREADS = {}
 
@@ -92,16 +93,15 @@ def allowed_file(name: str) -> bool:
     return any(name.lower().endswith(ext) for ext in ALLOWED_EXTENSIONS)
 
 # =====================================================
-# 🌐 ROUTES
+# ROUTES
 # =====================================================
-
 
 @app.route("/")
 def index():
     return app.send_static_file("index.html")
 
-# ---------------- CHAT ----------------
 
+# ---------------- CHAT ----------------
 
 @app.post("/chat")
 def chat():
@@ -133,7 +133,7 @@ def chat():
             )
         )
 
-        reply = "No response from agent"
+        reply = "No response"
         for msg in reversed(messages):
             if msg.role == "assistant" and msg.text_messages:
                 reply = msg.text_messages[-1].text.value
@@ -145,8 +145,37 @@ def chat():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-# ---------------- FILE UPLOAD ----------------
 
+# ---------------- FILE PREVIEW ----------------
+
+@app.post("/preview")
+def preview():
+    if "file" not in request.files:
+        return jsonify({"error": "No file"}), 400
+
+    f = request.files["file"]
+    name = f.filename.lower()
+
+    try:
+        if name.endswith(".csv"):
+            df = pd.read_csv(f)
+        elif name.endswith(".xlsx"):
+            df = pd.read_excel(f)
+        else:
+            return jsonify({"error": "Unsupported"}), 400
+
+        df = df.head(10)
+
+        return jsonify({
+            "columns": list(df.columns),
+            "rows": df.fillna("").values.tolist()
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------------- FILE UPLOAD (NDJSON) ----------------
 
 @app.post("/upload")
 def upload():
@@ -163,17 +192,42 @@ def upload():
     if not allowed_file(f.filename):
         return jsonify({"error": "Invalid file type"}), 400
 
-    blob_path = (
-        f"sessions/{session_id}/uploads/"
-        f"{uuid.uuid4().hex}_{secure_filename(f.filename)}"
-    )
-
     try:
+        name = f.filename.lower()
+
+        if name.endswith(".csv"):
+            df = pd.read_csv(f)
+        elif name.endswith(".xlsx"):
+            df = pd.read_excel(f)
+        else:
+            return jsonify({"error": "Unsupported"}), 400
+
+        # Convert to NDJSON
+        ndjson = "\n".join(
+            json.dumps(row.to_dict(), default=str)
+            for _, row in df.iterrows()
+        )
+
+        ndjson_name = (
+            f"{uuid.uuid4().hex}_"
+            f"{secure_filename(f.filename)}.ndjson"
+        )
+
+        blob_path = (
+            f"sessions/{session_id}/ndjson/{ndjson_name}"
+        )
+
         blob_client = container_client.get_blob_client(blob_path)
-        blob_client.upload_blob(f, overwrite=True)
+
+        blob_client.upload_blob(
+            ndjson.encode("utf-8"),
+            overwrite=True
+        )
 
         return jsonify({
-            "filename": f.filename,
+            "original_file": f.filename,
+            "ndjson_file": ndjson_name,
+            "records": len(df),
             "blob_url": blob_client.url
         })
 
@@ -181,8 +235,8 @@ def upload():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-# ---------------- PDF ----------------
 
+# ---------------- PDF ----------------
 
 @app.post("/download_pdf")
 def download_pdf():
