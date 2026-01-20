@@ -1,9 +1,10 @@
 flask
 werkzeug
 azure-identity
-azure-storage-blob
 azure-ai-projects
+azure-storage-blob
 reportlab
 pandas
 openpyxl
 gunicorn
+requests
